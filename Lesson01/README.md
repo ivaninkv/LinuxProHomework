@@ -14,6 +14,9 @@
 ДЗ с **: В вашем образе нормально работают VirtualBox Shared Folders.
 
 ## Описание решения
+
+### Работа с `vagrant`
+
 Склонируем репозиторий и положим `Vagrantfile` и скрипты для `packer` в каталог с домашним заданием.
 ```
 cd ~
@@ -28,7 +31,7 @@ rm -rf manual_kernel_update
 * [vagrant](https://www.vagrantup.com/downloads)
 * [packer](https://www.packer.io/downloads)
 
-Для переопрделения домашнего каталога `vagrnt`'а, можно определить переменную окружения `VAGRANT_HOME`.
+Для переопределения домашнего каталога `vagrnt`'а, можно определить переменную окружения `VAGRANT_HOME`.
 
 Переходим в директорию с домашним заданием и все дальнейшие команды выполняем оттуда.
 ```
@@ -49,13 +52,13 @@ yum install https://www.elrepo.org/elrepo-release-7.el7.elrepo.noarch.rpm
 yum list kernel* --disablerepo='*' --enablerepo elrepo-kernel
 ```
 В репозитории есть два типа ядер:
-* [kernel-lt](http://elrepo.org/tiki/kernel-lt) - **l**ong **t**erm support ядро. Более стаблильное, но и более старое.
+* [kernel-lt](http://elrepo.org/tiki/kernel-lt) - **l**ong **t**erm support ядро. Более стабильное, но и более старое.
 * [kernel-ml](http://elrepo.org/tiki/kernel-ml) - ядро из стабильной ветки - **m**ain**l**ine stable branch. Более свежие версии.
 Установим свежую версию ядра:
 ```
 sudo yum --enablerepo=elrepo-kernel install kernel-ml
 ```
-Далее необходимо обновить конфигурацию загрузчика, выбрать новое ядро по умолчанию и перезагрущить сервер:
+Далее необходимо обновить конфигурацию загрузчика, выбрать новое ядро по умолчанию и перезагрузить сервер:
 ```
 sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 sudo grub2-set-default 0
@@ -63,6 +66,70 @@ sudo reboot
 ```
 После перезагрузки подключаемся к машине и смотрим версию ядра:
 ```
+vagrant ssh
+uname -r
+```
+
+### Работа с `packer`
+
+Сначала внесем некоторые изменения в `config.json` для соответствия текущим версиям Centos. Блок `variables`:
+```
+"variables": {
+    "artifact_description": "CentOS 7.9 with kernel 5.x",
+    "artifact_version": "7.9.2009",
+    "image_name": "centos-7.9"
+  }
+```
+Изменился алгоритм работы с хэш-суммой образа:
+```
+"iso_url": "http://mirror.corbina.net/pub/Linux/centos/7.9.2009/isos/x86_64/CentOS-7-x86_64-Minimal-2009.iso",
+"iso_checksum": "sha256:07b94e6b1a0b0260b94c83d6bb76b26bf7a310dc78d7a9c7432809fb9bc6194a",
+```
+Также под `Windows` не заработало добавление пользователя `vagrant` в `sudoers`, поэтому поменяем эту секцию в файле `vagrant.ks`:
+```
+# Add vagrant to sudoers
+# cat > /etc/sudoers.d/vagrant << EOF_sudoers_vagrant
+# vagrant        ALL=(ALL)       NOPASSWD: ALL
+# EOF_sudoers_vagrant
+# Add vagrant to sudoers
+/bin/echo "vagrant  ALL=(ALL) NOPASSWD:ALL" | /bin/tee /etc/sudoers.d/vagrant
+/bin/chmod 0440 /etc/sudoers.d/vagrant
+/bin/sed -i "s/^.*requiretty/#Defaults requiretty/" /etc/sudoers
+```
+Переходим в директорию `packer` и запускаем сборку образа:
+```
+cd packer
+packer build centos.json
+```
+После успешного выполнения команды в директории `packer` появится файл `*.box`. Протестируем его локально:
+```
+vagrant box add --name centos-7-9 centos-7.9.2009-kernel-5-x86_64-Minimal.box
+mkdir test
+cd test
+vagrant init centos-7-9
+vagrant up
+vagrant ssh
+uname -r
+```
+Удалим тестовый образ из локального хранилища:
+```
+vagrant box remove centos-7-9
+```
+
+## работа с Vagrant Cloud
+
+Создаем `box` и публикуем образ в Vagrant cloud
+```
+vagrant cloud box create ivaninkv/centos-7-9
+vagrant cloud publish ivaninkv/centos-7-9 1.0 virtualbox centos-7.9.2009-kernel-5-x86_64-Minimal.box -d "Centos 7.9 witn kernel 5.11" --version-description "First version" --release --short-description "Download me!"
+```
+Не смотря на то, что в [документации](https://www.vagrantup.com/docs/cli/cloud#cloud-box-create) сказано, что по умолчанию `box` создается публичным, у меня создался приватным. Нужно переключить через интерфейс на публичный.
+
+Меняем имя образа в `Vagrantfile` в директории `test` и проверяем работоспособность нашего образа из облака.
+```
+:box_name => "ivaninkv/centos-7-9"
+
+vagrant up
 vagrant ssh
 uname -r
 ```

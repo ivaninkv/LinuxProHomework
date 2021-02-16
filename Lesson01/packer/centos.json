@@ -1,8 +1,8 @@
 {
   "variables": {
-    "artifact_description": "CentOS 7.7 with kernel 5.x",
-    "artifact_version": "7.7.1908",
-    "image_name": "centos-7.7"
+    "artifact_description": "CentOS 7.9 with kernel 5.x",
+    "artifact_version": "7.9.2009",
+    "image_name": "centos-7.9"
   },
 
   "builders": [
@@ -17,15 +17,14 @@
       "http_directory": "http",
 
       "iso_url": "http://mirror.corbina.net/pub/Linux/centos/7.9.2009/isos/x86_64/CentOS-7-x86_64-Minimal-2009.iso",
-      "iso_checksum": "07b94e6b1a0b0260b94c83d6bb76b26bf7a310dc78d7a9c7432809fb9bc6194a",
-      "iso_checksum_type": "sha256",
+      "iso_checksum": "sha256:07b94e6b1a0b0260b94c83d6bb76b26bf7a310dc78d7a9c7432809fb9bc6194a",
 
       "boot_command": [
         "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/vagrant.ks<enter><wait>"
       ],
 
       "shutdown_command": "sudo -S /sbin/halt -h -p",
-      "shutdown_timeout" : "5m",
+      "shutdown_timeout": "5m",
 
       "ssh_wait_timeout": "20m",
       "ssh_username": "vagrant",
@@ -36,7 +35,7 @@
       "output_directory": "builds",
 
       "vboxmanage": [
-        [  "modifyvm",  "{{.Name}}",  "--memory",  "1024" ],
+        [  "modifyvm",  "{{.Name}}",  "--memory",  "2048" ],
         [  "modifyvm",  "{{.Name}}",  "--cpus",  "2" ]
       ],
 
@@ -58,6 +57,7 @@
       "type": "vagrant"
     }
   ],
+
   "provisioners": [
     {
       "type": "shell",

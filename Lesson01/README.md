@@ -133,3 +133,41 @@ vagrant up
 vagrant ssh
 uname -r
 ```
+
+## Сборка ядра из исходников
+
+Из обсуждения в `slack`'е алгоритм и команды для компиляции ядра и включения `shared_folders` указаны ниже. Вручную на чистой `centos 7` это отрабатывает, но в `packer` не получается - после команд установки `gcc` и перезагрузки сервера не обнаруживается компилятор `gcc`. Разобраться с этим вопросом позже.
+
+Скачать с kernel.org исходники ядра, распаковать их, подготовить на основе старого конфига (.config), который можно сдёрнуть из ядра установленного с elrepo, и включить в этом конфиге два параметра (появились в ядре начиная с версии 5.6.7):
+CONFIG_VBOXSF_FS=y
+CONFIG_VBOXGUEST=y
+и сборка и установка нового ядра.
+
+```
+# установка зависимостей
+sudo yum update -y
+sudo yum install -y ncurses-devel make gcc bc bison flex elfutils-libelf-devel openssl-devel grub2 kernel-devel
+
+# установка gcc
+sudo yum install -y yum-utils centos-release-scl
+sudo yum -y --enablerepo=centos-sclo-rh-testing install devtoolset-7-gcc
+echo "source /opt/rh/devtoolset-7/enable" | sudo tee -a /etc/profile
+gcc --version
+
+# скачивание, компиляция и установка ядра
+curl https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.11.tar.xz > linux-5.11.tar.xz
+tar -xvf linux-5.11.tar.xz
+cd linux-5.11
+cp -v /boot/config-$(uname -r) .config
+make olddefconfig
+echo CONFIG_VBOXSF_FS=y >> .config
+echo CONFIG_VBOXGUEST=y >> .config
+make
+sudo make install
+
+# изменение загрузчика
+sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+sudo grub2-set-default 0
+sudo reboot
+uname -r
+```

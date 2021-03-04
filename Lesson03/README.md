@@ -6,9 +6,9 @@
 ```bash
 /dev/mapper/VolGroup00-LogVol00 38G 738M 37G 2% /
 ```
-* уменьшить том под `/` до 8G
-* выделить том под `/home`
-* выделить том под `/var`
+* [Уменьшить том под `/` до 8G](#root)
+* [Выделить том под `/var` в зеркало](#var)
+* [Выделить том под `/home`]
 * `/var` - сделать в mirror
 * `/home` - сделать том для снэпшотов
 * прописать монтирование в `fstab`
@@ -24,7 +24,8 @@
 Задание со звездочкой выполняется по желанию.
 
 ## Описание решения
-Возьмем `Vagrnatfile` по [ссылке](https://gitlab.com/otus_linux/stands-03-lvm.git) и проведем предварительные действия:
+### Самостоятельная практика
+Возьмем `Vagrnatfile` по [ссылке](https://gitlab.com/otus_linux/stands-03-lvm.git) и пройдем пратику самостоятельно. Ниже вывод, сохраненный с помощью утилиты `script`:
 ```
 Script started on Sun 28 Feb 2021 05:39:02 PM UTC
 [root@lvm vagrant]# lsblk
@@ -315,3 +316,79 @@ sde                       8:64   0    1G  0 disk
 
 Script done on Sun 28 Feb 2021 06:06:01 PM UTC
 ```
+
+### Уменьшить том под / до 8G <a name="root"></a>
+Для начала удалим `logical volume`, `volume group` и `physical volume`, созданные на самостоятельной практике:
+```bash
+# удаляем volume group
+lvscan
+ACTIVE            '/dev/VolGroup00/LogVol00' [<37.47 GiB] inherit
+ACTIVE            '/dev/VolGroup00/LogVol01' [1.50 GiB] inherit
+ACTIVE            '/dev/vg0/mirror' [816.00 MiB] inherit
+ACTIVE            '/dev/otus/test' [10.00 GiB] inherit
+ACTIVE            '/dev/otus/small' [100.00 MiB] inherit
+lvremove /dev/otus/test
+lvremove /dev/otus/small
+lvremove /dev/vg0/mirror
+# удаляем volume group
+vgs
+VG         #PV #LV #SN Attr   VSize   VFree
+VolGroup00   1   2   0 wz--n- <38.97g     0
+otus         2   0   0 wz--n-  11.99g 11.99g
+vg0          2   0   0 wz--n-   1.99g  1.99g
+vgremove otus
+vgremove vg0
+# удаляем physical volume
+pvs
+PV         VG         Fmt  Attr PSize   PFree
+/dev/sda3  VolGroup00 lvm2 a--  <38.97g     0
+/dev/sdb              lvm2 ---   10.00g 10.00g
+/dev/sdc              lvm2 ---    2.00g  2.00g
+/dev/sdd              lvm2 ---    1.00g  1.00g
+/dev/sde              lvm2 ---    1.00g  1.00g
+pvremove /dev/sdb
+pvremove /dev/sdc
+pvremove /dev/sdd
+pvremove /dev/sde
+```
+Установим пакет `xfsdump`  для снятия копии тома:
+```bash
+yum install -y xfsdump
+```
+Подготовим временный том для корневого раздела, изменим загрузчик и загрузимся с другого тома. Затем пересоздадим оригинальный `logical volume` с меньшим размером и вернем все обратно:
+```bash
+# создаем объекты lvm, файловую систему и делаем дамп данных текущего корневого раздела
+pvcreate /dev/sdb
+vgcreate vg_root /dev/sdb
+lvcreate -n lv_root -l +100%FREE /dev/vg_root
+mkfs.xfs /dev/vg_root/lv_root
+mount /dev/vg_root/lv_root /mnt
+xfsdump -J - /dev/VolGroup00/LogVol00 | xfsrestore -J - /mnt
+
+# обновляем конфигурацию grub2 и initrd
+for i in /proc/ /sys/ /dev/ /run/ /boot/; do mount --bind $i /mnt/$i; done
+chroot /mnt/
+grub2-mkconfig -o /boot/grub2/grub.cfg
+cd /boot/; for i in `ls initramfs-*img`; do dracut -v $i `echo $i | sed "s/initramfs-//g;s/.img//g"` --force; done
+
+# заменить rd.lvm.lv=VolGroup00/LogVol00 на rd.lvm.lv=vg_root/lv_root
+vi /boot/grub2/grub.cfg
+
+# перезагружаем машину и продолжаем работу
+# пересоздаем том
+lvremove /dev/VolGroup00/LogVol00
+lvcreate -n /dev/VolGroup00/LogVol00 -L 8G /dev/VolGroup00
+
+# создаем ФС, монтируем том и делаем дамп
+mkfs.xfs /dev/VolGroup00/LogVol00
+mount /dev/VolGroup00/LogVol00 /mnt
+xfsdump -J - /dev/vg_root/lv_root | xfsrestore -J - /mnt/
+
+# обновляем конфигурацию grub2 и initrd
+for i in /proc/ /sys/ /dev/ /run/ /boot/; do mount --bind $i /mnt/$i; done
+chroot /mnt/
+grub2-mkconfig -o /boot/grub2/grub.cfg
+cd /boot/; for i in `ls initramfs-*img`; do dracut -v $i `echo $i | sed "s/initramfs-//g;s/.img//g"` --force; done
+```
+
+### Выделить том под `/var` в зеркало <a name="var"></a>

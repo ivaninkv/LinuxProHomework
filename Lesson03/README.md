@@ -9,9 +9,6 @@
 * [Уменьшить том под `/` до 8G](#root)
 * [Выделить том под `/var` в зеркало](#var)
 * [Выделить том под `/home`](#home)
-* `/var` - сделать в mirror
-* `/home` - сделать том для снэпшотов
-* прописать монтирование в `fstab`
 * попробовать с разными опциями и разными файловыми системами (на выбор)
     * сгенерить файлы в `/home`
     * снять снэпшот
@@ -102,3 +99,99 @@ cd /boot/; for i in `ls initramfs-*img`; do dracut -v $i `echo $i | sed "s/initr
 ```
 
 ### Выделить том под `/var` в зеркало <a name="var"></a>
+Не выходя из `chroot`'а и не перезагружая сервер, создадим зеркало на дисках `/dev/sdc` и `/dev/sdb`
+```bash
+pvcreate /dev/sdc /dev/sdd
+vgcreate vg_var /dev/sdc /dev/sdd
+lvcreate -L 950M -m1 -n lv_var vg_var
+```
+Создадим на новом томе файловую систему и перемещаем туда каталог `/var`
+```bash
+mkfs.ext4 /dev/vg_var/lv_var
+mount /dev/vg_var/lv_var /mnt/
+cp -aR /var/* /mnt/
+```
+Сохраним содержимое старого `/var`
+```bash
+mkdir /tmp/oldvar && mv /var/* /tmp/oldvar
+```
+Смонтируем новый var в каталог `/var` и поправим `/etc/fstab` для автоматического монтирования
+```bash
+umount /mnt/
+mount /dev/vg_var/lv_var /var
+echo "`blkid | grep var: | awk '{print $2}'` /var ext4 defaults 0 0"  >> /etc/fstab
+```
+Перезагрузимся, проверим, что верно сделали предыдущие шаги и удалим временную `Volume Group`
+```bash
+lsblk
+NAME                     MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sda                        8:0    0   40G  0 disk
+├─sda1                     8:1    0    1M  0 part
+├─sda2                     8:2    0    1G  0 part /boot
+└─sda3                     8:3    0   39G  0 part
+  ├─VolGroup00-LogVol00  253:0    0    8G  0 lvm  /
+  └─VolGroup00-LogVol01  253:1    0  1.5G  0 lvm  [SWAP]
+sdb                        8:16   0   10G  0 disk
+└─vg_root-lv_root        253:7    0   10G  0 lvm
+sdc                        8:32   0    2G  0 disk
+├─vg_var-lv_var_rmeta_0  253:2    0    4M  0 lvm
+│ └─vg_var-lv_var        253:6    0  952M  0 lvm  /var
+└─vg_var-lv_var_rimage_0 253:3    0  952M  0 lvm
+  └─vg_var-lv_var        253:6    0  952M  0 lvm  /var
+sdd                        8:48   0    1G  0 disk
+├─vg_var-lv_var_rmeta_1  253:4    0    4M  0 lvm
+│ └─vg_var-lv_var        253:6    0  952M  0 lvm  /var
+└─vg_var-lv_var_rimage_1 253:5    0  952M  0 lvm
+  └─vg_var-lv_var        253:6    0  952M  0 lvm  /var
+sde                        8:64   0    1G  0 disk
+
+lvremove /dev/vg_root/lv_root
+vgremove /dev/vg_root
+pvremove /dev/sdb
+```
+
+### Выделить том под `/home` <a name="home"></a>
+Повторим шаги для каталога `/home`, которые мы делали для каталога `/var`. Создадим `Logical Volume`
+```bash
+lvcreate -n LogVol_Home -L 2G /dev/VolGroup00
+```
+Создадим файловую систему, примонтируем новый том и скопируем на него файлы
+```bash
+mkfs.xfs /dev/VolGroup00/LogVol_Home
+mount /dev/VolGroup00/LogVol_Home /mnt/
+cp -aR /home/* /mnt/
+rm -rf /home/*
+umount /mnt/
+mount /dev/VolGroup00/LogVol_Home /home/
+```
+Поправим `/etc/fstab` для автоматического монтирования
+```bash
+echo "`blkid | grep Home: | awk '{print $2}'` /home xfs defaults 0 0"  >> /etc/fstab
+```
+Создадим несколько файлов в каталоге `/home`
+```bash
+touch /home/file{1..20}
+```
+Создаем снепшот
+```bash
+lvcreate -L 100MB -s -n home_snap /dev/VolGroup00/LogVol_Home
+  Rounding up size to full physical extent 128.00 MiB
+  Logical volume "home_snap" created.
+```
+Удалим часть файлов
+```bash
+rm -f /home/file{11..20}
+ls /home/
+file1  file10  file2  file3  file4  file5  file6  file7  file8  file9  vagrant
+```
+Восстановим снепшот и проверим, что все файлы на месте
+```bash
+umount /home/
+lvconvert --merge /dev/VolGroup00/home_snap
+  Merging of volume VolGroup00/home_snap started.
+  VolGroup00/LogVol_Home: Merged: 100.00%
+mount /home/
+ls /home/
+file1   file11  file13  file15  file17  file19  file20  file4  file6  file8  vagrant
+file10  file12  file14  file16  file18  file2   file3   file5  file7  file9
+```

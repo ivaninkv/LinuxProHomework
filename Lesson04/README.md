@@ -67,7 +67,6 @@
 В качестве стенда будем использовать `Vagrant`-стенд, расположенный по [адресу](https://github.com/nixuser/virtlab/tree/main/zfs).
 
 ### Определить алгоритм с наилучшим сжатием <a name="compression"></a>
-
 Ниже приведены команды, с помощью которых можно создать пул, ФС и сравнить сжатие. Полный вывод, записанный утилитой `script` можно посмотреть [тут](step1.md).
 ```bash
 sudo su
@@ -92,6 +91,7 @@ zfs get compression,compressratio
 ### Определить настройки pool’a <a name="pool"></a>
 Ниже приведены команды, которые позволяют скачть `pool`, импортировать его и узнать настройки. Полный вывод, записанный утилитой `script` можно посмотреть [тут](step2.md).
 ```bash
+sudo su
 wget 'https://docs.google.com/uc?export=download&id=1KRBNW33QWqbvbVHa3hLJivOAt60yukkg' -O zfs_task1.tar.gz
 tar -xvf zfs_task1.tar.gz
 zpool import -d ${PWD}/zpoolexport/ otus
@@ -107,5 +107,19 @@ zfs get recordsize,compression,checksum otus
 * какое сжатие используется - zle
 * какая контрольная сумма используется - sha256
 
-
 ### Найти сообщение от преподавателей <a name="message"></a>
+Ниже приведены команды, демонстрирующие работу со снепшотами в `zfs`. Полный вывод, записанный утилитой `script` можно посмотреть [тут](step3.md).\
+Будем пользоваться пулом, созданным для первого задания, если его нет, нужно сначала его создать:
+```bash
+sudo su
+echo disk{1..6} | xargs -n 1 fallocate -l 500M
+zpool create raid raidz3 $PWD/disk[1-6]
+zpool list
+```
+Выполнение задания:
+```bash
+wget 'https://docs.google.com/uc?export=download&id=1gH8gCL9y7Nd5Ti3IRmplZPF1XjzxeRAG' -O otus_task2.file
+zfs receive raid/otus < otus_task2.file
+find /raid/otus/ -name "secret_message" -exec cat {} \;
+```
+Сообщение от преподавателей - ссылка на репозиторий [awesome](https://github.com/sindresorhus/awesome).

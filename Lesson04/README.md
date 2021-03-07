@@ -30,13 +30,11 @@
 ### Определить настройки pool’a
 
 Зачем:
-Для переноса дисков между системами используется функция export/import. Отрабатываем навыки работы с файловой системой `ZFS`
+Для переноса дисков между системами используется функция `export`/`import`. Отрабатываем навыки работы с файловой системой `ZFS`
 
 Шаги:
-- Загрузить архив с файлами локально.
-https://drive.google.com/open?id=1KRBNW33QWqbvbVHa3hLJivOAt60yukkg
-Распаковать.
-- С помощью команды `zfs import` собрать pool `ZFS`.
+- Загрузить архив с файлами локально - https://drive.google.com/open?id=1KRBNW33QWqbvbVHa3hLJivOAt60yukkg. Распаковать.
+- С помощью команды `zpool import` собрать pool `ZFS`.
 - Командами `zfs` определить настройки
     - размер хранилища
     - тип pool
@@ -92,5 +90,22 @@ zfs get compression,compressratio
 По получившимся результатам можно сделать вывод, что наилучшее сжатие текста обеспечивает алгоритм `gzip`.
 
 ### Определить настройки pool’a <a name="pool"></a>
+Ниже приведены команды, которые позволяют скачть `pool`, импортировать его и узнать настройки. Полный вывод, записанный утилитой `script` можно посмотреть [тут](step2.md).
+```bash
+wget 'https://docs.google.com/uc?export=download&id=1KRBNW33QWqbvbVHa3hLJivOAt60yukkg' -O zfs_task1.tar.gz
+tar -xvf zfs_task1.tar.gz
+zpool import -d ${PWD}/zpoolexport/ otus
+# смотрим настройки
+zpool list -o name,size
+zpool status otus
+zfs get recordsize,compression,checksum otus
+```
+После выполнения команд, можно сделать вывод, что настройки пула следующие:
+* размер хранилища - 480M
+* тип pool - mirror-0
+* значение recordsize - 128K
+* какое сжатие используется - zle
+* какая контрольная сумма используется - sha256
+
 
 ### Найти сообщение от преподавателей <a name="message"></a>

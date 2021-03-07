@@ -3,7 +3,7 @@
 ## Задание
 
 Практические навыки работы с `ZFS`
-Цель: Отрабатываем навыки работы с созданием томов export/import и установкой параметров.
+Цель: Отрабатываем навыки работы с созданием томов `export`/`import` и установкой параметров.
 
 * [Определить алгоритм с наилучшим сжатием](#compression)
 * [Определить настройки pool’a](#pool)
@@ -21,9 +21,7 @@
 - определить какие алгоритмы сжатия поддерживает `zfs` (`gzip`/`gzip-N`, `zle`, `lzjb`, `lz4`)
 - создать 4 файловых системы на каждой применить свой алгоритм сжатия
 Для сжатия использовать либо текстовый файл либо группу файлов:
-- скачать файл “Война и мир” и расположить на файловой системе
-`wget -O War_and_Peace.txt http://www.gutenberg.org/ebooks/2600.txt.utf-8`
-либо скачать файл ядра распаковать и расположить на файловой системе
+- скачать файл “Война и мир” и расположить на файловой системе `wget -O War_and_Peace.txt http://www.gutenberg.org/ebooks/2600.txt.utf-8`, либо скачать файл ядра распаковать и расположить на файловой системе
 
 Результат:
 - список команд которыми получен результат с их выводами
@@ -44,7 +42,7 @@ https://drive.google.com/open?id=1KRBNW33QWqbvbVHa3hLJivOAt60yukkg
     - тип pool
     - значение recordsize
     - какое сжатие используется
-    - какая контрольная сумма используется
+    - какая контрольная сумма используется\
 Результат:
 - список команд которыми восстановили `pool` . Желательно с Output команд.
 - файл с описанием настроек `settings`
@@ -68,7 +66,30 @@ https://drive.google.com/open?id=1KRBNW33QWqbvbVHa3hLJivOAt60yukkg
 
 ## Описание решения
 
+В качестве стенда будем использовать `Vagrant`-стенд, расположенный по [адресу](https://github.com/nixuser/virtlab/tree/main/zfs).
+
 ### Определить алгоритм с наилучшим сжатием <a name="compression"></a>
+
+Ниже приведены команды, с помощью которых можно создать пул, ФС и сравнить сжатие. Полный вывод, записанный утилитой `script` можно посмотреть [тут](step1.md).
+```bash
+sudo su
+echo disk{1..6} | xargs -n 1 fallocate -l 500M
+zpool create raid raidz3 $PWD/disk[1-6]
+zpool list
+man zfs | grep compression=
+for i in gzip lz4 lzjb zle; do zfs create raid/$i; done
+zfs create raid/gzipmax
+for i in gzip lz4 lzjb zle; do zfs set compression=$i raid/$i; done
+zfs set compression=gzip-9 raid/gzipmax
+zfs get compression,compressratio
+cp /vagrant/War_and_Peace.txt /raid/gzip
+cp /vagrant/War_and_Peace.txt /raid/lz4
+cp /vagrant/War_and_Peace.txt /raid/lzjb
+cp /vagrant/War_and_Peace.txt /raid/zle
+cp /vagrant/War_and_Peace.txt /raid/gzipmax
+zfs get compression,compressratio
+```
+По получившимся результатам можно сделать вывод, что наилучшее сжатие текста обеспечивает алгоритм `gzip`.
 
 ### Определить настройки pool’a <a name="pool"></a>
 

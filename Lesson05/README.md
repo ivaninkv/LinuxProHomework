@@ -10,14 +10,14 @@
     * [Способ 3. `rw init=/sysroot/bin/sh`](#way3)
 * [Установить систему с `LVM`, после чего переименовать `VG`](#lvm)
 * [Добавить модуль в `initrd`](#initrd)
-* 4(*). Сконфигурировать систему без отдельного раздела с `/boot`, а только с `LVM`. Репозиторий с пропатченым grub: https://yum.rumyantsev.com/centos/7/x86_64/ PV необходимо инициализировать с параметром --bootloaderareasize 1m.
+* 4(*). Сконфигурировать систему без отдельного раздела с `/boot`, а только с `LVM`. Репозиторий с пропатченым grub: https://yum.rumyantsev.com/centos/7/x86_64/ PV необходимо инициализировать с параметром `--bootloaderareasize 1m`.
 
 Критерии оценки:
 Описать действия, описать разницу между методами получения шелла в процессе загрузки. Где получится - используем script, где не получается - словами или копипастой описываем действия
 
 ## Описание решения
 
-В качестве стенда будем использовать `Vagrant`-стенд из прошлого задания, расположенный по [адресу](https://github.com/nixuser/virtlab/tree/main/zfs). Уберем в нем секцию провижининга `ZFS` за ненадобностью.
+В качестве стенда будем использовать `Vagrant`-стенд из третьего задания, расположенный по [адресу](https://gitlab.com/otus_linux/stands-03-lvm.git).
 
 ### Попасть в систему без пароля несколькими способами <a name="password"></a>
 Все три способа, которые мы рассмотрим, реализуются через редактирование параметров загрузки системы. Нажмем клавишу `e` при выборе варианта загрузки, чтобы отредактировать параметры. После редактирования параметров нужно нажать `Ctrl-x` для загрузки в систему. Эти параметры применятся единоразово. Если нужно изменить параметры на постоянной основе - нужно переконфигурировать `Grub`.\
@@ -58,5 +58,33 @@ touch /.autorelabel
 Отличием является то, что файловая система уже смонтирована в режиме `rw`.
 
 ### Установить систему с `LVM`, после чего переименовать `VG` <a name="lvm"></a>
+
+Ниже список команд, которыми мы выполняем нужные действия, полный вывод, записанный утилитой `script`, можно посмотреть [здесь](lvm.md).
+```bash
+sudo su
+vgs
+vgrename VolGroup00 OtusRoot
+# /etc/fstab
+cat /etc/fstab | grep VolGroup00
+sed -i 's/VolGroup00/OtusRoot/g' /etc/fstab
+cat /etc/fstab | grep OtusRoot
+
+# /etc/default/grub
+cat /etc/default/grub | grep VolGroup00
+sed -i 's/VolGroup00/OtusRoot/g' /etc/default/grub
+cat /etc/default/grub | grep OtusRoot
+
+# /boot/grub2/grub.cfg
+cat /boot/grub2/grub.cfg | grep VolGroup00
+sed -i 's/VolGroup00/OtusRoot/g' /boot/grub2/grub.cfg
+cat /boot/grub2/grub.cfg | grep OtusRoot
+
+# пересоздаем initrd image
+mkinitrd -f -v /boot/initramfs-$(uname -r).img $(uname -r)
+
+# смотрим результат
+vgs
+```
+
 
 ### Добавить модуль в `initrd` <a name="initrd"></a>
